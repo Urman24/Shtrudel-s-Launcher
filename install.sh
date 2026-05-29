@@ -1,56 +1,56 @@
-#!/bin/bash
+# Shtrudel's Launcher Installer for Windows
+# This script downloads and runs the latest installer from GitHub
 
-# Colors for output
-RED='\033[0;31m'
-GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
-NC='\033[0m' # No Color
+Write-Host "=== Shtrudel's Launcher Installer ===" -ForegroundColor Green
+Write-Host "Fetching latest release information..." -ForegroundColor White
 
-echo -e "${GREEN}=== Shtrudel's Launcher Installer ===${NC}"
-echo "Fetching latest release information..."
+# GitHub API URL for latest release
+$apiUrl = "https://api.github.com/repos/Urman24/Shtrudel-s-Launcher/releases/latest"
 
-# Get the latest release URL
-API_URL="https://api.github.com/repos/Urman24/Shtrudel-s-Launcher/releases/latest"
-LATEST_RELEASE=$(curl -s "$API_URL")
-
-# Check if we got a response
-if [ -z "$LATEST_RELEASE" ]; then
-    echo -e "${RED}Error: Failed to fetch release information${NC}"
+try {
+    # Fetch latest release info
+    $releaseInfo = Invoke-RestMethod -Uri $apiUrl -ErrorAction Stop
+    
+    # Get download URL for setup file
+    $downloadUrl = $null
+    foreach ($asset in $releaseInfo.assets) {
+        if ($asset.name -like "*setup*" -or $asset.name -like "*.exe") {
+            $downloadUrl = $asset.browser_download_url
+            break
+        }
+    }
+    
+    if (-not $downloadUrl) {
+        Write-Host "Error: Could not find download file" -ForegroundColor Red
+        Write-Host "Please check the repository manually: https://github.com/Urman24/Shtrudel-s-Launcher/releases/latest" -ForegroundColor Yellow
+        exit 1
+    }
+    
+    # Display release info
+    $tagName = $releaseInfo.tag_name
+    Write-Host "Found release: $tagName" -ForegroundColor Yellow
+    
+    # Set download path
+    $downloadsPath = [Environment]::GetFolderPath("UserProfile") + "\Downloads"
+    $fileName = [System.IO.Path]::GetFileName($downloadUrl)
+    $outputFile = Join-Path $downloadsPath $fileName
+    
+    Write-Host "Downloading $fileName..." -ForegroundColor White
+    Write-Host "URL: $downloadUrl" -ForegroundColor Gray
+    
+    # Download the file
+    Invoke-WebRequest -Uri $downloadUrl -OutFile $outputFile -ErrorAction Stop
+    
+    Write-Host "✓ File downloaded successfully: $outputFile" -ForegroundColor Green
+    Write-Host ""
+    Write-Host "Launching installer..." -ForegroundColor Yellow
+    
+    # Run the installer
+    Start-Process -FilePath $outputFile -Wait
+    
+    Write-Host "Installation completed!" -ForegroundColor Green
+    
+} catch {
+    Write-Host "Error: $_" -ForegroundColor Red
     exit 1
-fi
-
-# Search for the setup file download URL
-DOWNLOAD_URL=$(echo "$LATEST_RELEASE" | grep -o '"browser_download_url": *"[^"]*setup[^"]*"' | head -1 | cut -d'"' -f4)
-
-if [ -z "$DOWNLOAD_URL" ]; then
-    # If no setup file found, look for any exe file
-    DOWNLOAD_URL=$(echo "$LATEST_RELEASE" | grep -o '"browser_download_url": *"[^"]*\.exe[^"]*"' | head -1 | cut -d'"' -f4)
-fi
-
-if [ -z "$DOWNLOAD_URL" ]; then
-    echo -e "${RED}Error: Could not find download file${NC}"
-    echo "Please check the repository manually: https://github.com/Urman24/Shtrudel-s-Launcher/releases/latest"
-    exit 1
-fi
-
-# Get release version
-TAG_NAME=$(echo "$LATEST_RELEASE" | grep -o '"tag_name": *"[^"]*"' | cut -d'"' -f4)
-echo -e "${YELLOW}Found release: ${TAG_NAME}${NC}"
-
-# Filename for saving
-FILENAME=$(basename "$DOWNLOAD_URL")
-OUTPUT_FILE="$HOME/Downloads/$FILENAME"
-
-echo "Downloading $FILENAME..."
-echo "URL: $DOWNLOAD_URL"
-
-# Download file with progress bar
-if curl -L --progress-bar -o "$OUTPUT_FILE" "$DOWNLOAD_URL"; then
-    echo -e "${GREEN}✓ File downloaded successfully: $OUTPUT_FILE${NC}"
-    echo ""
-    echo "To install, run the file via Wine or on a Windows system:"
-    echo -e "${YELLOW}wine \"$OUTPUT_FILE\"${NC}"
-else
-    echo -e "${RED}Error downloading file${NC}"
-    exit 1
-fi
+}
